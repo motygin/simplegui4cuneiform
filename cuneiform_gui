@@ -1,0 +1,141 @@
+#!/bin/bash
+
+#############################################################################
+# File : cuneiform_gui
+# Version: 0.1.2 (07/02/09)
+# The script asks parameters for cuneiform linux ocr through zenity dialogs
+#
+# Usage: cuneiform_gui [-i inputfile] [-o outputfile]
+# if input or output file option is absent, then the file name is asked
+# if outputfile takes value AUTO or empty, then the name is constructed as
+# <input file name without extension>.<extension according to the chosen output format>
+#
+# Copyright (C) 2009 Oleg Motygin <o.v.motygin at gmail dot com>
+#############################################################################
+
+if [[ -z $( type -p zenity ) ]]; then echo -e "Zenity -- NOT INSTALLED !";exit 11; fi
+if [[ -z $( type -p cuneiform ) ]]; then zenity --info --text "Cuneiform -- NOT INSTALLED !"; exit 22; fi
+
+image=""
+fnm=""
+
+while getopts ":hoi:" optname
+do
+  if [ "$optname" = "h" ]; then
+   echo "Usage: cuneiform_gui [-i inputfile] [-o outputfile]"
+   echo "if input or output file option is absent, then the file name is asked"
+   echo "if outputfile takes value AUTO or empty, then the name is constructed as"
+   echo "<input file name without extension>.<extension according to the chosen output format>"
+   exit
+  else
+    case "$optname" in
+    "i")
+      image="$OPTARG"
+    ;;
+    "o")
+      fnm="$OPTARG"
+      if [ "$fnm" = "" ]; then
+        fnm="AUTO"
+      fi
+    ;;
+    "?")
+      echo "Unknown option $OPTARG"
+    ;;
+    ":")
+      echo "No argument value for option $OPTARG"
+    ;;
+    *)
+      # Should not occur
+      echo "Unknown error while processing options"
+    ;;
+    esac
+  fi
+done
+
+if [ "$image" = "" ]; then
+ image=`zenity --title="Image file" --file-selection`
+ exitcode=$?
+ if [ $exitcode -ne 0 -o "$image" = "" ]; then exit 1; fi
+fi
+
+height=280
+width=220
+
+language=`zenity --list --text "" --height $height --width $width \
+--column "" --column "Language of text" \
+"eng" "English" \
+"rus" "Russian" \
+"ruseng" "Russian-English" \
+"ger" "German" \
+"fra" "French" \
+"ita" "Italian" \
+"spa" "Spanish" \
+"por" "Portugal" \
+"dut" "Dutch" \
+"dan" "Danish" \
+"fin" "Finnish" \
+"swe" "Swedish" \
+"hrv" "Croatian" \
+"cze" "Czech" \
+"srp" "Serbian" \
+"pol" "Polish" \
+"ukr" "Ukrainian" \
+"bul" "Bulgarian" \
+"hun" "Hungarian" \
+"rum" "Romanian" \
+"slo" "Slovak" \
+"est" "Estonian" \
+"lav" "Latvian" \
+"lit" "Lithuanian" \
+"tur" "Turkish" \
+--hide-column 1 --print-column 1`
+
+if [ "$language" = "" ]; then exit 2; fi
+
+height=280
+width=320
+
+outformat=`zenity --list --text "" --height $height --width $width \
+--column "" --column "Output format" \
+"text" "plain text" \
+"smarttext" "plain text with TeX paragraphs" \
+"rtf" "RTF format" \
+"html" "HTML format" \
+"hocr" "hOCR HTML format" \
+"native" "Cuneiform 2000 format" \
+--hide-column 1 --print-column 1`
+
+if [ "$outformat" = "" ]; then exit; fi
+
+case "$outformat" in
+"text"|"smarttext") ext="txt"
+;;
+"rtf") ext="rtf"
+;;
+"html"|"hocr") ext="html"
+;;
+"native") ext="fed"
+;;
+esac
+
+if [ "$fnm" = "" ]; then
+  fnm=`zenity --title="Save recognized text as a file" --file-selection --save`
+  exitcode=$?
+  if [ $exitcode -ne 0 -o "$fnm" = "" ]; then exit 3; fi
+else
+  if [ "$fnm" = "AUTO" ]; then
+    fnm=${image%.*}
+    fnm="$fnm.$ext"
+    if [ -f "$fnm" ]; then
+      fnm="$fnm-`date +%d.%m.%y-%H:%M`"
+    fi
+  fi
+fi
+
+zenity --notification --text "Recognition goes on..." >& /dev/null &
+pid=$!
+cuneiform -l "$language" -f "$outformat" -o "$fnm" "$image"
+#echo "cuneiform -l $language -f $outformat -o $fnm $image"
+kill -9 $pid >& /dev/null
+
+exit 0
